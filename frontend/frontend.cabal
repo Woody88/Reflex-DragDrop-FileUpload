@@ -7,8 +7,8 @@ version:             0.1.0.0
 -- description:         
 license:             OtherLicense
 license-file:        LICENSE
-author:              Will Fancher
-maintainer:          elvishjerricco@gmail.com
+author:              Woodson Delhia
+maintainer:          woodsondelhia88@gmail.com
 -- copyright:           
 category:            Web
 build-type:          Simple
@@ -19,7 +19,15 @@ executable frontend
   ghc-options:         -Wall -O2 -threaded -rtsopts -with-rtsopts=-N
   -- other-extensions:    
   build-depends:       base >=4.9 && <4.11
+                     , aeson
                      , common
+                     , reflex
                      , reflex-dom
+                     , reflex-dom-core
+                     , jsaddle
+                     , jsaddle-warp
+                     , ghcjs-dom
+                     , containers
+                     , text
   hs-source-dirs:      src
   default-language:    Haskell2010
