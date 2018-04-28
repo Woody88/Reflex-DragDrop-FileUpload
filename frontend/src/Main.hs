@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE RecursiveDo #-}
 
 module Main where
 
@@ -17,7 +18,8 @@ import qualified GHCJS.DOM.Element              as DOM
 import qualified GHCJS.DOM.EventM               as DOM
 import qualified GHCJS.DOM.MouseEvent           as DOM
 import qualified GHCJS.DOM.Types                as DOM 
-import Language.Javascript.JSaddle.Warp (run)
+-- import Language.Javascript.JSaddle.Warp (run)
+import Dev
 import Reflex.Dom.Core (mainWidget, mainWidgetWithHead)
 import Reflex.Dom hiding (run, mainWidget, mainWidgetWithHead)
 import Data.Monoid ((<>))
@@ -26,7 +28,7 @@ import Data.Monoid ((<>))
 --- Other way of getting File, However output same error as above  ---
 
 main :: IO ()
-main = run 3000 (mainWidgetWithHead headWidget mainEntry)
+main = run mainEntry
 
 headWidget :: MonadWidget t m => m ()
 headWidget = do
@@ -35,16 +37,28 @@ headWidget = do
     elAttr "script" ("src" =: "../js/uikit.min.js")       blank
     elAttr "script" ("src" =: "../js/uikit-icons.min.js") blank
 
-mainEntry :: MonadWidget t m => m ()
-mainEntry = do
-    dropEl <- elAttr' "div" ("style" =: "width: 250px; height: 250px; background-color: red; margin-bottom: 5px") $ blank
-    dragEl <- elAttr' "div" ("style" =: "width: 250px; height: 250px; background-color: green; margin-bottom: 5px;" <> "draggable" =: "true") $ blank
 
-    dragStartEv <- dragStartHandler dragEl
+mainEntry :: MonadWidget t m => m ()
+mainEntry = 
+    elAttr "div" ("class" =: "widget-wrapper uk-height-1-1 ui-flex uk-flex-middle uk-flex-center uk-text-center") mainEntry'
+
+dropWidget ::  MonadWidget t m => Behavior t (Event t Text) -> m (El t, ())
+dropWidget bEv = do
+    let uploaderText = dynText =<< (holdDyn " Attach binaries by dropping them here or" $ switch bEv)
+    elAttr' "div" ("class" =: "uk-card uk-card-default uk-card-hover uk-placeholder" <> "id" =: "uploader") $ do
+        elAttr "span" ("uk-icon" =: "icon: cloud-upload") blank
+        elAttr "span" ("class" =: "uk-text-middle") $ uploaderText 
+
+mainEntry' :: MonadWidget t m => m ()
+mainEntry' = mdo
+    dropEl <- dropWidget (constant $ leftmost ["Converting File..." <$ dropEv, fileText]) <-- and this
+    -- dragEl <- elAttr' "div" ("style" =: "width: 250px; height: 250px; background-color: green; margin-bottom: 5px;" <> "draggable" =: "true") $ blank
+    -- dragStartEv <- dragStartHandler dragEl
+
     dropOverEv  <- dragOverHandler dropEl 
     dropEv      <- dropHandler dropEl
     fileText    <- holdDropEvent dropEv readDropFile
-    dynText =<< (holdDyn "not dragged" $ leftmost [("dragged" <$ dragStartEv), ("dragged over" <$ dropOverEv), fileText])
+    dynText =<< (holdDyn "not dragged" $ leftmost [("dragged over" <$ dropOverEv), fileText]) <-- need to fix this
     pure ()
 
 

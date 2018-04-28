@@ -1,0 +1,15 @@
+body, height {
+    height: 100%;
+    width: 100%;
+    font-family: ProximaNova,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+}
+
+.widget-wrapper{
+    display: flex;
+} 
+
+#uploader{
+    height: 20%;
+    width: 30%;
+    padding: 4% 0%;
+}
