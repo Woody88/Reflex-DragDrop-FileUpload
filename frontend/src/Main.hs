@@ -18,14 +18,24 @@ import qualified GHCJS.DOM.EventM               as DOM
 import qualified GHCJS.DOM.MouseEvent           as DOM
 import qualified GHCJS.DOM.Types                as DOM 
 import Language.Javascript.JSaddle.Warp (run)
-import Reflex.Dom.Core (mainWidget)
-import Reflex.Dom hiding (run, mainWidget)
+import Reflex.Dom.Core (mainWidget, mainWidgetWithHead)
+import Reflex.Dom hiding (run, mainWidget, mainWidgetWithHead)
 import Data.Monoid ((<>))
 
-main :: IO ()
-main = run 3000 (mainWidget $ mainEntry)
 
-mainEntry :: forall t m. MonadWidget t m => m ()
+--- Other way of getting File, However output same error as above  ---
+
+main :: IO ()
+main = run 3000 (mainWidgetWithHead headWidget mainEntry)
+
+headWidget :: MonadWidget t m => m ()
+headWidget = do
+    elAttr "meta"   ("name" =: "viewport" <> "content" =: "width=device-width, initial-scale=1") blank
+    elAttr "link"   ("href" =: "../css/uikit.min.css")    blank
+    elAttr "script" ("src" =: "../js/uikit.min.js")       blank
+    elAttr "script" ("src" =: "../js/uikit-icons.min.js") blank
+
+mainEntry :: MonadWidget t m => m ()
 mainEntry = do
     dropEl <- elAttr' "div" ("style" =: "width: 250px; height: 250px; background-color: red; margin-bottom: 5px") $ blank
     dragEl <- elAttr' "div" ("style" =: "width: 250px; height: 250px; background-color: green; margin-bottom: 5px;" <> "draggable" =: "true") $ blank
@@ -33,14 +43,12 @@ mainEntry = do
     dragStartEv <- dragStartHandler dragEl
     dropOverEv  <- dragOverHandler dropEl 
     dropEv      <- dropHandler dropEl
-    -- let rawdragDivEl = DOM.unsafeCastTo DOM.HTMLDivElement (_element_raw dragDiv)
-    -- dragEv <- wrapDomEvent rawdragDivEl (`DOM.on` DOM.dragStart)
-    dynText =<< (holdDyn "not dragged" $ leftmost [("dragged" <$ dragStartEv), ("dragged over" <$ dropOverEv), ("drop" <$ dropEv)])
-    --display _<<
+    fileText    <- holdDropEvent dropEv readDropFile
+    dynText =<< (holdDyn "not dragged" $ leftmost [("dragged" <$ dragStartEv), ("dragged over" <$ dropOverEv), fileText])
     pure ()
 
 
-dragOverHandler :: forall t m a. MonadWidget t m => (El t, a) -> m (Event t ())
+dragOverHandler :: (MonadWidget t m) => (El t, a) -> m (Event t ())
 dragOverHandler rEl = do
     rawEl <- selectRawDiv . fst $ rEl 
     w <- wrapDomEvent rawEl (onEventName Dragover) $ do
@@ -50,112 +58,39 @@ dragOverHandler rEl = do
             DOM.setDropEffect dt ("copy" :: JSString)
     pure $ traceEvent "my e: " w
         
-dropHandler :: forall t m a. MonadWidget t m => (El t, a) -> m (Event t Text)
+dropHandler :: (MonadWidget t m) => (El t, a) -> m (Event t (Maybe DOM.File))
 dropHandler rEl = do
     rawEl <- selectRawDiv . fst $ rEl 
     e <- wrapDomEvent rawEl (onEventName Drop) $ do 
             DOM.preventDefault
             dt <- fromMaybe (error "no dt?") <$> (DOM.getDataTransfer =<< DOM.event) 
             DOM.setEffectAllowed dt ("all" :: JSString)
-            file <- (flip DOM.item 0) =<< DOM.getFiles dt
-            readDropFile file
-    pure $ coincidence e
-    
+            flip DOM.item 0 =<< DOM.getFiles dt
+    pure e
        
 
-dragStartHandler :: forall t m a. MonadWidget t m => (El t, a) -> m (Event t ())
+dragStartHandler :: (MonadWidget t m) => (El t, a) -> m (Event t ())
 dragStartHandler rEl = do
     rawEl <- selectRawDiv . fst $ rEl 
     wrapDomEvent rawEl (onEventName Dragstart) $ pure ()
 
 
-readDropFile :: forall t m. MonadWidget t m => Maybe DOM.File -> m (Event t Text)
-readDropFile file = pure never
-    -- do 
-    -- fileReader <- DOM.newFileReader
-    -- DOM.readAsText fileReader file (Nothing :: Maybe JSString)
-    -- e <- wrapDomEvent fileReader (`DOM.on` DOM.loadEnd) . DOM.liftJSM $ do
-    --         v <- fromMaybe (error "") <$> DOM.getResult fileReader
-    --         s <- DOM.liftJSM $ (DOM.fromJSVal . DOM.unStringOrArrayBuffer) v
-    --         pure $ (fmap T.pack s)
-    -- pure $ fmapMaybe id e
+readDropFile :: (MonadWidget t m) => Maybe DOM.File -> m (Event t Text)
+readDropFile file = do 
+    fileReader <- DOM.newFileReader
+    DOM.readAsText fileReader file (Nothing :: Maybe JSString)
+    e <- wrapDomEvent fileReader (`DOM.on` DOM.loadEnd) . DOM.liftJSM $ do
+            v <- fromMaybe (error "") <$> DOM.getResult fileReader
+            s <- DOM.liftJSM $ (DOM.fromJSVal . DOM.unStringOrArrayBuffer) v
+            pure $ (fmap T.pack s)
+    pure $ fmapMaybe id e
 
 
-selectRawDiv :: forall t m. MonadWidget t m => El t -> m DOM.HTMLDivElement
+selectRawDiv :: (MonadWidget t m) => El t -> m DOM.HTMLDivElement
 selectRawDiv div_ = DOM.unsafeCastTo DOM.HTMLDivElement (_element_raw div_)
 
-
-
-
-
-
-
-
---- Other way of getting File, However output same error as above  ---
-s 
--- main :: IO ()
--- main = run 3000 (mainWidget $ mainEntry)
-
--- mainEntry :: MonadWidget t m => m ()
--- mainEntry = do
---     dropEl <- elAttr' "div" ("style" =: "width: 250px; height: 250px; background-color: red; margin-bottom: 5px") $ blank
---     dragEl <- elAttr' "div" ("style" =: "width: 250px; height: 250px; background-color: green; margin-bottom: 5px;" <> "draggable" =: "true") $ blank
-
---     dragStartEv <- dragStartHandler dragEl
---     dropOverEv  <- dragOverHandler dropEl 
---     dropEv      <- dropHandler dropEl
---     let m = coincidence $ dropEv >>= readDropFile
---     -- let rawdragDivEl = DOM.unsafeCastTo DOM.HTMLDivElement (_element_raw dragDiv)
---     -- dragEv <- wrapDomEvent rawdragDivEl (`DOM.on` DOM.dragStart)
---     dynText =<< (holdDyn "not dragged" $ leftmost [("dragged" <$ dragStartEv), ("dragged over" <$ dropOverEv)])
---     --display _<<
---     pure ()
-
-
--- dragOverHandler :: (MonadWidget t m) => (El t, a) -> m (Event t ())
--- dragOverHandler rEl = do
---     rawEl <- selectRawDiv . fst $ rEl 
---     w <- wrapDomEvent rawEl (onEventName Dragover) $ do
---             DOM.preventDefault
---             dt <- fromMaybe (error "no dt?") <$> (DOM.getDataTransfer =<< DOM.event) 
---             DOM.setEffectAllowed dt ("all" :: JSString)
---             DOM.setDropEffect dt ("copy" :: JSString)
---     pure $ traceEvent "my e: " w
-        
--- dropHandler :: (MonadWidget t m) => (El t, a) -> m (Event t DOM.FileReader)
--- dropHandler rEl = do
---     rawEl <- selectRawDiv . fst $ rEl 
---     e <- wrapDomEvent rawEl (onEventName Drop) $ do 
---             DOM.preventDefault
---             dt <- fromMaybe (error "no dt?") <$> (DOM.getDataTransfer =<< DOM.event) 
---             DOM.setEffectAllowed dt ("all" :: JSString)
---             file <- (flip DOM.item 0) =<< DOM.getFiles dt
---             fileReader <- DOM.newFileReader
---             DOM.readAsText fileReader file (Nothing :: Maybe JSString)
---             pure fileReader
---             -- e <- wrapDomEvent fileReader (`DOM.on` DOM.loadEnd) . DOM.liftJSM $ do
---             --         v <- fromMaybe (error "") <$> DOM.getResult fileReader
---             --         s <- DOM.liftJSM $ (DOM.fromJSVal . DOM.unStringOrArrayBuffer) v
---             --         pure $ (fmap T.pack s)
---             -- pure $ fmapMaybe id e
---     pure e
-       
-
--- dragStartHandler :: (MonadWidget t m) => (El t, a) -> m (Event t ())
--- dragStartHandler rEl = do
---     rawEl <- selectRawDiv . fst $ rEl 
---     wrapDomEvent rawEl (onEventName Dragstart) $ pure ()
-
-
--- readDropFile :: (MonadWidget t m) => DOM.FileReader -> m (Event t Text)
--- readDropFile fileReader = do 
---     DOM.readAsText fileReader file (Nothing :: Maybe JSString)
---     e <- wrapDomEvent fileReader (`DOM.on` DOM.loadEnd) . DOM.liftJSM $ do
---             v <- fromMaybe (error "") <$> DOM.getResult fileReader
---             s <- DOM.liftJSM $ (DOM.fromJSVal . DOM.unStringOrArrayBuffer) v
---             pure $ (fmap T.pack s)
---     pure $ fmapMaybe id e
-
-
--- selectRawDiv :: (MonadWidget t m) => El t -> m DOM.HTMLDivElement
--- selectRawDiv div_ = DOM.unsafeCastTo DOM.HTMLDivElement (_element_raw div_)
+holdDropEvent :: (MonadWidget t m) => Event t a -> (a -> m (Event t b)) -> m (Event t b)
+holdDropEvent e f = do
+    (_, e') <- runWithReplace (pure ()) (fmap f e)
+    held <- hold never e'
+    return (switch held)
