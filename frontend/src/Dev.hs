@@ -39,7 +39,7 @@ indexHtml' =
     \<head>\n\
     \<title>JSaddle</title>\n\
     \</head>\n\
-    \<body class=\"uk-height-1-1\">\n\
+    \<body class=\"uk-height-1-1 uk-flex uk-flex-center uk-flex-middle\">\n\
     \</body>\n\
     \<script src=\"jsaddle.js\"></script>\n\
     \</html>"
