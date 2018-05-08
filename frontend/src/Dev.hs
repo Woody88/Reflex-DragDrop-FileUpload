@@ -8,7 +8,6 @@ module Dev (
 
 import Data.Maybe (fromMaybe)
 import Data.Foldable (traverse_)
-import Data.Monoid ((<>))
 import Reflex.Dom.Core
 
 import           Network.Wai.Handler.Warp               (defaultSettings,
@@ -18,7 +17,6 @@ import           Network.WebSockets                     (ConnectionOptions, defa
 
 import           Language.Javascript.JSaddle            (JSM)
 import           Language.Javascript.JSaddle.Run        (syncPoint)
-import Language.Javascript.JSaddle.Run.Files (indexHtml)
 import           Language.Javascript.JSaddle.WebSockets (debugWrapper, jsaddleOr, jsaddleApp, jsaddleJs)
 import qualified Network.Wai                            as W
 import           Network.Wai.Middleware.Static
@@ -28,7 +26,7 @@ import           System.Directory                       (listDirectory)
 import qualified Data.Text                              as Text
 import qualified Data.Map                               as Map
 import Data.ByteString.Lazy (ByteString)
-import qualified Network.HTTP.Types as H (status403, status200)
+import qualified Network.HTTP.Types as H (status200)
 
 
 

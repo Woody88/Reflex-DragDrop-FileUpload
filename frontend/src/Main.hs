@@ -4,16 +4,16 @@
 
 module Main where
 
-import Control.Monad.IO.Class
+-- import Control.Monad.IO.Class
 import Data.Text (Text)
 import Data.Text.Encoding as T
 import qualified Data.Text as T
-import qualified Data.Text.IO as T
-import Data.ByteString as B
+-- import qualified Data.Text.IO as T
+import qualified Data.Map as M
+-- import Data.ByteString as B
 import Data.Maybe (fromMaybe, listToMaybe)
-import Data.JSString (JSString)
-import Data.JSString.Text as T
-import qualified Data.Aeson as AE
+-- import Data.JSString.Text as T
+-- import qualified Data.Aeson as AE
 import qualified GHCJS.DOM.DataTransfer         as DOM
 import qualified GHCJS.DOM.FileReader           as DOM
 import qualified GHCJS.DOM.FileList             as DOM
@@ -24,24 +24,27 @@ import qualified GHCJS.DOM.MouseEvent           as DOM
 import qualified GHCJS.DOM.Types                as DOM 
 import qualified Foreign.JavaScript.Utils       as DOM
 -- import Language.Javascript.JSaddle.Warp (run)
-import Dev
-import Reflex.Dom.Core (mainWidget, mainWidgetWithHead)
-import Reflex.Dom hiding (run, mainWidget, mainWidgetWithHead)
--- import Reflex.Dom 
+-- import Dev
+-- import Reflex.Dom.Core (mainWidget, mainWidgetWithHead)
+-- import Reflex.Dom hiding (run, mainWidget, mainWidgetWithHead)
+import Reflex.Dom 
 import Data.Monoid ((<>))
 
 data Action = Drop' | Dragover' | FileContent Text | NoFile
 
-main :: IO ()
-main = run mainEntry
+-- main :: IO ()
+-- main = run mainEntry
 
-headWidget :: MonadWidget t m => m ()
-headWidget = do
-    elAttr "meta"   ("name" =: "viewport" <> "content" =: "width=device-width, initial-scale=1") blank
-    elAttr "link"   ("href" =: "../css/uikit.min.css")    blank
-    elAttr "link"   ("href" =: "../css/style.min.css")    blank
-    elAttr "script" ("src" =: "../js/uikit.min.js")       blank
-    elAttr "script" ("src" =: "../js/uikit-icons.min.js") blank
+main :: IO ()
+main = mainWidget mainEntry
+
+-- headWidget :: MonadWidget t m => m ()
+-- headWidget = do
+--     elAttr "meta"   ("name" =: "viewport" <> "content" =: "width=device-width, initial-scale=1") blank
+--     elAttr "link"   ("href" =: "assets/css/uikit.min.css" <> "rel" =: "stylesheet")           blank
+--     elAttr "link"   ("href" =: "assets/css/style.css" <> "rel" =: "stylesheet")               blank
+--     elAttr "script" ("src" =: "assets/js/uikit.min.js" <> "type" =: "text/javascript")        blank
+--     elAttr "script" ("src" =: "assets/js/uikit-icons.min.js"  <> "type" =: "text/javascript") blank
 
 mainEntry :: MonadWidget t m => m ()
 mainEntry = 
@@ -50,26 +53,43 @@ mainEntry =
 mainEntry' :: MonadWidget t m => m ()
 mainEntry' = mdo
     dropEl@(_, fileDyn) <- dropWidget $ leftmost [Dragover' <$ dragOverEv, Drop' <$ dropEv, fmap FileContent fileText, NoFile <$ never]
-    fileDownloaderWidget
+    mkFile (fmap FileContent fileText)
+    -- fileDownloaderWidget
     -- dragEl <- elAttr' "div" ("style" =: "width: 250px; height: 250px; background-color: green; margin-bottom: 5px;" <> "draggable" =: "true") $ blank
     -- dragStartEv <- dragStartHandler dragEl
     let selectFileEv = listToMaybe <$> (updated fileDyn)
     dragOverEv   <- dragOverHandler dropEl 
     dropEv       <- dropHandler dropEl
     fileText     <- holdDropEvent (leftmost [selectFileEv, dropEv]) readDropFile
-    b <- (sample . current) =<< (holdDyn Nothing (leftmost [(Just "nothing") <$ dragOverEv, fmap Just fileText]))
-    mkFile b
     pure ()
 
-mkFile :: MonadWidget t m => Maybe Text -> m ()
-mkFile Nothing = pure ()
-mkFile (Just t) = do
-    liftIO $ T.putStrLn t
-    -- arrBuffer <- DOM.bsToArrayBuffer $ T.encodeUtf8 t
-    -- f <- DOM.getName =<< DOM.newFile [arrBuffer] ("mytext.txt" :: JSString) Nothing
-    -- let (u :: Text) = T.textFromJSString f 
-    -- liftIO $ T.putStrLn (u <> " heollo")
+mkFile :: MonadWidget t m => Event t Action -> m ()
+mkFile ev = do
+    dEv <- holdDropEvent ev mkFile'
+    dDownloader <- holdDyn Nothing dEv
+    let dynAttr = fmap parseAction dDownloader
+    elDynAttr "a" dynAttr $ text "Download"
     pure ()
+    where parseAction :: Maybe Text -> M.Map Text Text
+          parseAction (Just t) = ("class" =: "uk-card uk-card-default uk-width-1-1 uk-card-hover" <> "id" =: "file-download" <> "href" =: t <> "download" =: "file.txt")
+          parseAction Nothing =  ("class" =: "uk-card uk-card-default uk-width-1-1 uk-card-hover" <> "id" =: "file-download" <> "hidden" =: "")
+
+mkFile' :: MonadWidget t m => Action -> m (Event t (Maybe Text))
+mkFile' (FileContent t) = do
+    arrBuffer <- DOM.bsToArrayBuffer $ T.encodeUtf8 t
+    f <- DOM.newFile [arrBuffer] ("mytext.txt" :: DOM.JSString) Nothing
+    mkDataUrl (Just f)
+mkFile' _ = pure (Nothing <$ never)
+
+mkDataUrl :: (MonadWidget t m) => Maybe DOM.File -> m (Event t (Maybe Text))
+mkDataUrl file = do 
+    fileReader <- DOM.newFileReader
+    DOM.readAsDataURL fileReader file 
+    e <- wrapDomEvent fileReader (`DOM.on` DOM.loadEnd) . DOM.liftJSM $ do
+            v <- fromMaybe (error "") <$> DOM.getResult fileReader
+            s <- DOM.liftJSM $ (DOM.fromJSVal . DOM.unStringOrArrayBuffer) v
+            pure $ (fmap T.pack s)
+    pure $ e
 
 dropWidget ::  MonadWidget t m => Event t Action -> m (El t, Dynamic t [DOM.File])
 dropWidget dropEv = do
@@ -80,8 +100,8 @@ dropWidget dropEv = do
         elAttr "span" ("class" =: "uk-text-middle") $ dynText uploaderText 
         fileSelectWidget hasFile
     where parseEventText Drop' = "Convert File..."
-          parseEventText Dragover'     = initialUploadText
           parseEventText (FileContent filetxt) = filetxt
+          parseEventText _     = initialUploadText
           hasFileEventHanlder (FileContent _) = True
           hasFileEventHanlder _           = False
           initialUploadText = " Attach binaries by dropping them here or "
@@ -106,8 +126,8 @@ dragOverHandler rEl = do
     w <- wrapDomEvent rawEl (onEventName Dragover) $ do
             DOM.preventDefault
             dt <- fromMaybe (error "no dt?") <$> (DOM.getDataTransfer =<< DOM.event) 
-            DOM.setEffectAllowed dt ("all" :: JSString)
-            DOM.setDropEffect dt ("copy" :: JSString)
+            DOM.setEffectAllowed dt ("all" :: DOM.JSString)
+            DOM.setDropEffect dt ("copy" :: DOM.JSString)
     pure $ traceEvent "my e: " w
         
 dropHandler :: (MonadWidget t m) => (El t, a) -> m (Event t (Maybe DOM.File))
@@ -116,7 +136,7 @@ dropHandler rEl = do
     e <- wrapDomEvent rawEl (onEventName Drop) $ do 
             DOM.preventDefault
             dt <- fromMaybe (error "no dt?") <$> (DOM.getDataTransfer =<< DOM.event) 
-            DOM.setEffectAllowed dt ("all" :: JSString)
+            DOM.setEffectAllowed dt ("all" :: DOM.JSString)
             flip DOM.item 0 =<< DOM.getFiles dt
     pure e
        
@@ -130,7 +150,7 @@ dragStartHandler rEl = do
 readDropFile :: (MonadWidget t m) => Maybe DOM.File -> m (Event t Text)
 readDropFile file = do 
     fileReader <- DOM.newFileReader
-    DOM.readAsText fileReader file (Nothing :: Maybe JSString)
+    DOM.readAsText fileReader file (Nothing :: Maybe DOM.JSString)
     e <- wrapDomEvent fileReader (`DOM.on` DOM.loadEnd) . DOM.liftJSM $ do
             v <- fromMaybe (error "") <$> DOM.getResult fileReader
             s <- DOM.liftJSM $ (DOM.fromJSVal . DOM.unStringOrArrayBuffer) v
