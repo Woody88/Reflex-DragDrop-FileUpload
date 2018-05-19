@@ -16,39 +16,33 @@ import qualified Data.Text.Lazy.Encoding as TL
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import qualified Data.Map as M
--- import Data.ByteString as B
+
 import Data.Maybe (fromMaybe, listToMaybe)
 import Data.JSString                           as DOM
 import qualified Data.Aeson as AE
-import qualified Data.Aeson.Types as AE
 import qualified GHCJS.DOM.DataTransfer         as DOM
 import qualified GHCJS.DOM.FileReader           as DOM
 import qualified GHCJS.DOM.FileList             as DOM
 import qualified GHCJS.DOM.File                 as DOM
-import qualified GHCJS.DOM.Blob                 as DOM
 import qualified GHCJS.DOM.Element              as DOM
 import qualified GHCJS.DOM.EventM               as DOM
 import qualified GHCJS.DOM.MouseEvent           as DOM
 import qualified GHCJS.DOM.Types                as DOM 
 import qualified Foreign.JavaScript.Utils       as DOM
-import qualified GHCJS.Marshal as MS
+import GHCJS.Marshal as MS 
+
+#ifndef ghcjs_HOST_OS
 import Language.Javascript.JSaddle.Evaluate
-import Language.Javascript.JSaddle.Object (jsg, js1, jsgf, jsg0, jsg1)
--- import Language.Javascript.JSaddle.Warp (run)
-import Dev
--- import Reflex.Dom.Core (mainWidget, mainWidgetWithHead)
-import Reflex.Dom hiding (run, mainWidget, mainWidgetWithHead)
--- import Reflex.Dom 
+import Language.Javascript.JSaddle.Object (jsg, js1)
+#endif
+import Reflex.Dom 
 import Data.Monoid ((<>))
 import Metadata 
 
 data Action = Drop' | Dragover' | FileContent Text | NoFile
 
 main :: IO ()
-main = run mainEntry
-
--- main :: IO ()
--- main = mainWidget mainEntry
+main = mainWidget mainEntry
 
 -- headWidget :: MonadWidget t m => m ()
 -- headWidget = do
@@ -112,7 +106,7 @@ dropWidget dropEv = do
         elAttr "span" ("class" =: "uk-text-middle") $ dynText uploaderText 
         fileSelectWidget hasFile
     where parseEventText Drop' = "Converting File..."
-          parseEventText (FileContent filetxt) = "File Converted."
+          parseEventText (FileContent _) = "File Converted."
           parseEventText _     = initialUploadText
           hasFileEventHanlder (FileContent _) = True
           hasFileEventHanlder _           = False
@@ -161,24 +155,18 @@ dragStartHandler rEl = do
 
 readDropFile :: (MonadWidget t m) => Maybe DOM.File -> m (Event t Text)
 readDropFile file = do 
-    fType <- (fileType file)
-    --display $ constDyn fType
     fileReader <- DOM.newFileReader
     DOM.readAsText fileReader file (Nothing :: Maybe DOM.JSString)
     e <- wrapDomEvent fileReader (`DOM.on` DOM.loadEnd) . DOM.liftJSM $ do
             v <- fromMaybe (error "") <$> DOM.getResult fileReader
             s <- DOM.liftJSM $ (DOM.fromJSVal . DOM.unStringOrArrayBuffer) v
             (Just e' :: Maybe AE.Value) <- DOM.liftJSM $ MS.fromJSVal =<< (yamlLoad $ fromMaybe (error "") (DOM.pack <$> s))
-            --let (e :: Maybe MD.ActionOverridePackage) = AE.parseMaybe AE.parseJSON e'
-            --liftIO $ print e
-            let (AE.Success e :: AE.Result Metadata) = AE.fromJSON e'
-                xml = (Just . TL.toStrict . TL.decodeUtf8 . encodeMeta $ e)
-            liftIO $ print $ xml
-            pure $ xml
+            let (xml :: Text) = case (AE.fromJSON e' :: AE.Result Metadata) of
+                                        (AE.Success e) -> TL.toStrict . TL.decodeUtf8 . encodeMeta $ e
+                                        (AE.Error a) -> (T.pack a)
+            --pure (fmap T.pack s)
+            pure $ Just xml
     pure $ fmapMaybe id e
-    where fileType :: (MonadWidget t m) => Maybe DOM.File -> m (Maybe Text)
-          fileType Nothing = pure Nothing
-          fileType (Just f) = Just <$> (DOM.getType f) 
 
 selectRawDiv :: (MonadWidget t m) => El t -> m DOM.HTMLDivElement
 selectRawDiv div_ = DOM.unsafeCastTo DOM.HTMLDivElement (_element_raw div_)
@@ -189,23 +177,15 @@ holdDropEvent e f = do
     held <- hold never e'
     return (switch held)
 
--- yaml :: MonadWidget t m =>  m DOM.JSVal
--- yaml = do
---     jsyaml <- DOM.liftJSM $ jsg ("jsyaml" :: Text)
---     DOM.liftJSM $ jsyaml ^. js1 ("load" :: Text) ("greeting: hello\nname: world" :: Text)
-
-
 #ifdef ghcjs_HOST_OS
-foreign import javascript unsafe 
-"jsyaml.load($1);"
-yamlLoad :: DOM.JSString -> IO (DOM.JSVal)
+foreign import javascript unsafe "$r=jsyaml.load($1);" yamlLoad :: DOM.JSString -> IO (DOM.JSVal)
 #else
 yamlLoad :: DOM.MonadJSM m =>  DOM.JSString -> m DOM.JSVal
 yamlLoad yml = do
     yamlScript <- liftIO $ T.readFile ("jsbits/js-yaml.min.js")
-    yaml <- DOM.liftJSM $ eval yamlScript 
+    _ <- DOM.liftJSM $ eval yamlScript 
     f <- DOM.liftJSM $ jsg ("jsyaml" :: Text)
     DOM.liftJSM $ f ^. js1 ("load" :: Text) yml
-   -- c <- DOM.liftJSM $ jsg ("console" :: Text)
+-- c <- DOM.liftJSM $ jsg ("console" :: Text)
     --DOM.liftJSM $ c ^. js1 ("log" :: Text) g
 #endif
