@@ -9,7 +9,6 @@ module Dev (
 import Data.Maybe (fromMaybe)
 import Data.Foldable (traverse_)
 import Reflex.Dom.Core
-import Data.Monoid ((<>))
 
 import           Network.Wai.Handler.Warp               (defaultSettings,
                                                          runSettings, setPort,
