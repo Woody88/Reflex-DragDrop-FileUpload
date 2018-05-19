@@ -9,6 +9,7 @@ module Dev (
 import Data.Maybe (fromMaybe)
 import Data.Foldable (traverse_)
 import Reflex.Dom.Core
+import Data.Monoid ((<>))
 
 import           Network.Wai.Handler.Warp               (defaultSettings,
                                                          runSettings, setPort,
@@ -73,11 +74,13 @@ devMainAutoReload backend frontend port =
 headSection ::
   MonadWidget t m =>
   FilePath ->
-    FilePath ->
+  FilePath ->
+  FilePath ->
+  [FilePath] ->
   [FilePath] ->
   [FilePath] ->
   m ()
-headSection jsPath cssPath cssFiles jsFiles =
+headSection jsPath jsbitsPath cssPath cssFiles jsbitsFiles jsFiles =
   let
     stylesheet s =
       elAttr "link" (Map.fromList [("rel", "stylesheet"), ("href", s)]) $
@@ -92,30 +95,33 @@ headSection jsPath cssPath cssFiles jsFiles =
     -- stylesheet "https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap-theme.min.css"
     traverse_ (\f -> stylesheet . Text.pack $ cssPath </> f) cssFiles
     traverse_ (\f -> script . Text.pack $ jsPath </> f) jsFiles
+    traverse_ (\f -> script . Text.pack $ jsbitsPath </> f) jsbitsFiles
 
-serveCss :: FilePath -> FilePath -> (forall x. Widget x ()) -> IO (W.Application, JSM ())
-serveCss jsPath cssPath w = do
+serveCss :: FilePath -> FilePath -> FilePath -> (forall x. Widget x ()) -> IO (W.Application, JSM ())
+serveCss jsPath jsbitsPath cssPath w = do
   jsFiles <- listDirectory $ "." </> jsPath
+  jsbitsFiles <- listDirectory $ "." </> jsbitsPath
   cssFiles <- listDirectory $ "." </> cssPath
   let
     frontendApp =
-      mainWidgetWithHead (headSection jsPath cssPath cssFiles jsFiles) w
+      mainWidgetWithHead (headSection jsPath jsbitsPath cssPath cssFiles jsbitsFiles jsFiles) w
     backendApp  =
-      staticPolicy $ hasPrefix "assets"  
+      static
   pure (backendApp jsaddleApp, frontendApp)
 
 run' ::
   FilePath ->
   FilePath ->
+  FilePath ->
   Int ->
   (forall x. Widget x ()) ->
   IO ()
-run' jsPath cssPath port w = do
-  (backendApp, frontendApp) <- serveCss jsPath cssPath w
+run' jsPath jsbitsPath cssPath port w = do
+  (backendApp, frontendApp) <- serveCss jsPath jsbitsPath cssPath w
   devMainAutoReload backendApp frontendApp port
 
 run ::
   (forall x. Widget x ())
   -> IO ()
 run =
-  run' "assets/js" "assets/css" 3000
+  run' "assets/js" "jsbits" "assets/css" 3000

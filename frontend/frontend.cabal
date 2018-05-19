@@ -17,6 +17,10 @@ cabal-version:       >=1.10
 executable frontend
   main-is:             Main.hs
   ghc-options:         -Wall -O2 -threaded -rtsopts -with-rtsopts=-N
+  js-sources: 
+      jsbits/js-yaml.min.js
+    , jsbits/js-yaml.js
+    , jsbits/myfn.js
   -- other-extensions:   
   build-depends:       
       base >=4.9 && <4.11
@@ -25,12 +29,15 @@ executable frontend
     , common
     , reflex
     , reflex-dom
+    , sforce-migration
+    , lens
     , reflex-dom-core
     , jsaddle
     , ghcjs-dom
     , containers
     , text
-
+    , unordered-containers
+    , attoparsec
   if !impl(ghcjs -any)
     build-depends:
         filepath >=1.4 && <1.5
