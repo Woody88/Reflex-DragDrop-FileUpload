@@ -7,7 +7,7 @@
 
 module Main where
 
-import Control.Lens
+-- import Control.Lens
 import Control.Monad.IO.Class
 import Data.Text (Text)
 import Data.Text.Encoding as T
@@ -18,8 +18,9 @@ import qualified Data.Text.IO as T
 import qualified Data.Map as M
 
 import Data.Maybe (fromMaybe, listToMaybe)
-import Data.JSString                           as DOM
+
 import qualified Data.Aeson as AE
+import Data.JSString                            as DOM
 import qualified GHCJS.DOM.DataTransfer         as DOM
 import qualified GHCJS.DOM.FileReader           as DOM
 import qualified GHCJS.DOM.FileList             as DOM
@@ -178,14 +179,12 @@ holdDropEvent e f = do
     return (switch held)
 
 #ifdef ghcjs_HOST_OS
-foreign import javascript unsafe "$r=jsyaml.load($1);" yamlLoad :: DOM.JSString -> IO (DOM.JSVal)
+foreign import javascript unsafe "jsyaml.load($1)" yamlLoad :: DOM.JSString -> IO (DOM.JSVal)
 #else
 yamlLoad :: DOM.MonadJSM m =>  DOM.JSString -> m DOM.JSVal
 yamlLoad yml = do
-    yamlScript <- liftIO $ T.readFile ("jsbits/js-yaml.min.js")
+    yamlScript <- liftIO $ T.readFile ("jsbits/js-yaml.js")
     _ <- DOM.liftJSM $ eval yamlScript 
     f <- DOM.liftJSM $ jsg ("jsyaml" :: Text)
     DOM.liftJSM $ f ^. js1 ("load" :: Text) yml
--- c <- DOM.liftJSM $ jsg ("console" :: Text)
-    --DOM.liftJSM $ c ^. js1 ("log" :: Text) g
 #endif
